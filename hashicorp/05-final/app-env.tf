@@ -119,6 +119,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "s3b1-encrypt" {
 ##DB Section
 ##The aws_db_instance will be built in the default VPC if not specified by db_subnet_group_name
 
+variable "rds-subnet-id-1" {
+  type = string
+  description = "Default subnet id for rds"
+}
+
+variable "rds-subnet-id-2" {
+  type = string
+  description = "Default subnet id for rds"
+}
+
 resource "aws_db_parameter_group" "default" {
   name   = "rds-pg"
   family = "mysql5.7"
@@ -136,8 +146,8 @@ resource "aws_db_parameter_group" "default" {
 
 resource "aws_db_subnet_group" "default" {
   name       = "res-subnet-group"
-  subnet_ids = ["subnet-0d2480d73a5b3f526"
-  ,"subnet-0d472108565cc7bf5"
+  subnet_ids = [var.rds-subnet-id-1,
+  var.rds-subnet-id-2
   ,]
 
   tags = {
@@ -266,7 +276,8 @@ resource "aws_instance" "aws-ami-instance-0" {
   disable_api_termination = false
 
 
-  # key_name = "aws-dev-lrl-us-west-2"
+  key_name = "aws-dev-lrl-us-west-2"
+  iam_instance_profile = aws_iam_instance_profile.role-instance-profile.name
 
   security_groups = [var.instance-sg,
   ]
@@ -286,15 +297,20 @@ resource "aws_instance" "aws-ami-instance-0" {
 
   user_data = <<EOF
 #!/bin/bash
-mkdir img
+mkdir ~/img1
 sudo systemctl start mariadb
-echo export AWS_DEFAULT_REGION="us-west-2" >> ~/.bash_profile
-echo export S3_NAME=${aws_s3_bucket.s3-b-1.bucket} >> ~/.bash_profile
+echo export AWS_DEFAULT_REGION="us-west-2" >> /home/ec2-user/.bash_profile
+echo export S3_NAME=${aws_s3_bucket.s3-b-1.bucket} >> /home/ec2-user/.bash_profile
 
-echo export DB_DRIVE="${var.env-db-drive}" >> ~/.bashrc
-echo export DB_URL="${var.env-db-url}" >> ~/.bashrc
-echo export DB_USERNAME="${var.env-db-username}" >> ~/.bashrc
-echo export DB_PASSWORD="${var.env-db-password}" >> ~/.bashrc
-source ~/.bash_profile
+echo export DB_DRIVE="${var.env-db-drive}" >> /home/ec2-user/.bashrc
+echo export DB_URL="jdbc:mysql://${aws_db_instance.default.address}/TestDev" >> /home/ec2-user/.bashrc
+echo export DB_USERNAME="${var.env-db-username}" >> /home/ec2-user/.bashrc
+echo export DB_PASSWORD="${var.env-db-password}" >> /home/ec2-user/.bashrc
+
+
+source ~/.bashrc
+
+su - ec2-user -c "mkdir img"
+su - ec2-user -c "java -jar app.jar &"
 EOF
 }
